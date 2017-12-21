@@ -1,0 +1,205 @@
+.___________. _______ .___  ___.      ___          ___   
+|           ||   ____||   \/   |     /   \        |__ \  
+`---|  |----`|  |__   |  \  /  |    /  ^  \          ) | 
+    |  |     |   __|  |  |\/|  |   /  /_\  \        / /  
+    |  |     |  |____ |  |  |  |  /  _____  \      / /_  
+    |__|     |_______||__|  |__| /__/     \__\    |____| 
+                                                         
+Nume   : Maftei Stefan - Radu
+Grupa  : 324CD
+Materie: PC
+
+
+
+	Pentru realizarea acestei teme am pornit de la scheletul de la
+Laboratorul 8 (Multiplexare). Mesajele de eroare din cadrul programului le-am
+scris ca atare in locul unde acestea pot aparea pentru a fi codul mai usor
+de urmarit. Functiilor pe string-uri utilizate (ex: strncmp) care au nevoie de
+numarul de bytes din string le-au fost puse explicit numarul acesta, deoarece
+cunosc lungimea fiecarui mesaj pe care doresc sa il afisez (acesta este fix).
+
+=== server.c ===
+
+	In acest fisier am implementat server-ul. Am definit o structura de
+date pentru informatiile unui client si doua functii ajutatoare. Informatiile
+din "users_data_file" vor fi citite folosind un vector de astfel de structuri.
+Functiile ajutatoare sunt:
+a) check_client_card() -> functia verifica daca exista vreun client cu numarul
+			de card dat ca parametru;
+		       -> intoarce acel client daca s-a gasit sau NULL in caz
+			contrar.
+
+b) get_client() -> functia obtine clientul care s-a logat pe un anumit socket
+		(socket-ul clientului);
+		-> returneaza acel client sau NULL in caz contrar.
+
+	In cadrul programului verific apelul executabilului sa aiba 3
+parametri, apoi citesc din fisierul dat ca parametru informatiile clientilor,
+pe care le adaug intr-un vector de structuri.
+	Initializez la zero multimea de descriptori de citire (atat cel normal
+cat si pe cel pe care il voi folosi temporar). Deschid socket-ul TCP al
+server-ului, completez informatiile pentru adresa server-ului, efectuez
+operatia de bind(), si setez cate conexiuni vor fi maxim ascultate. Apoi setez
+ca socketi activi socket-ul TCP al server-ului si stdin.
+	Setez socket-ul UDP, declarand doua variabile pentru adresa UDP a
+server-ului si pentru adresa UDP clientului. Efectuez operatia bind(), apoi
+setez si socket-ul UDP la multimea de socketi activi.
+	Urmeaza ciclul in care are loc transmisia de date. Efectuam operatia
+de multiplexare folosind functia select(), apoi verificam toti descriptorii.
+In cazul in care este stdin, se verifica daca string-ul citit este comanda
+"quit" a server-ului. Daca da se anunta clientii sa se inchida, apoi se
+sterg din multimea de descriptori activi, se inchid socketii UDP si TCP din
+server, incheindu-se procesul. Daca se scrie orice altceva in server nu se va
+executa nimic.
+	Daca este socket-ul UDP inseamna ca se efectueaza comanda "unlock".
+Vedeti sectiunea pentru comanda "unlock" de mai jos. Altfel se verifica daca
+se primeste mesaj de la un client. Mesajul se verifica pentru a obtine comanda
+data de client. Urmeaza sectiunea de comenzi date de client server-ului:
+
+1) login
+	Se parseaza comanda data de client, obtinandu-se astfel numarul
+cardului si pin-ul. Se verifica existenta cardului (functia
+check_client_card()), se verifica daca clientul cu cardul respectiv e
+logat, se verifica daca acel card este blocat si se verifica pin-ul daca
+este corect. La fiecare pin gresit se actualizeaza variabila din structura
+de informatii a clientului. La 3 pin-uri gresite introduse cardului,
+acesta se blocheaza.
+	Mentionez faptul ca nu e nevoie de accesarea cardului cu 3 pin-uri
+gresite consecutiv pentru a se bloca. Orice card se poate bloca la
+introducerea gresita a pin-ului de 3 ori, de oriunde. (pin-urile gresite
+se cumuleaza).
+	Odata logat, se va actualiza variabila din structura clientului,
+marcand cu valoarea socket-ului actiunea de login cu succes.
+
+2) logout
+	Actiunea de logout se efectueaza cu succes, deoarece clientul nu
+permite trimiterea actiunilor fara ca clientul sa fie logat. Dar pentru
+orice eventualitate se verifica daca exista vreun client logat cu
+valoarea socket-ului. Daca se gaseste atunci se va seta la zero acea
+variabila.
+
+3) listsold
+	Actiunea de listsold se efectueaza cu succes, deoarece clientul nu
+permite trimiterea actiunilor fara ca clientul sa fie logat. Dar pentru
+orice eventualitate se verifica daca exista vreun client logat cu
+valoarea socket-ului. Actiunea este afisarea soldului contului din
+cadrul structurii clientului logat.
+
+4) getmoney
+	Actiunea de getmoney se efectueaza cu succes, deoarece clientul nu
+permite trimiterea actiunilor fara ca clientul sa fie logat. Dar pentru
+orice eventualitate se verifica daca exista vreun client logat cu
+valoarea socket-ului. Se parseaza comanda pentru a obtine suma de
+bani de retras din cont. Aceasta suma apoi se verifica daca este multiplu de
+10 si daca este mai mica decat suma detinuta in cont de clientul logat.
+	Apoi se actualizeaza soldul contului clientului si se afiseaza mesajul
+corespunzator retragerii banilor.
+
+5) putmoney
+	Actiunea de logout se efectueaza cu succes, deoarece clientul nu
+permite trimiterea actiunilor fara ca clientul sa fie logat. Dar pentru
+orice eventualitate se verifica daca exista vreun client logat cu
+valoarea socket-ului. Se parseaza comanda pentru a obtine suma de bani de
+pus in cont. Apoi se actualizeaza contul clientului.
+
+6) quit
+	Se verifica daca clientul este logat, deoarece acesta trebuie sa fie
+delogat in urma actiunii quit. Apoi socket-ul clientului se sterge din
+multimea descriptorilor activi.
+
+7) unlock
+	Se obtine mesajul si se verifica daca este cererea de deblocare.
+In acest caz se obtine din mesajul trimis numarul cardului de deblocat si
+se verifica daca exista si daca respectivul card este blocat. Apoi se trimite
+mesajul pentru parola secreta clientului.
+	In cazul in care nu este cererea de deblocare, inseamna ca s-a trimis
+parola secreta. Se intampla acest lucru deoarece deblocarea are loc in doua
+etape consecutive. Se obtine numarul cardului si parola secreta din mesaj,
+apoi se verifica daca acel card exista, daca este blocat si daca parola este
+corecta. La final se trimite un mesaj corespunzator clientului care a efectuat
+deblocarea.
+
+
+
+=== client.c ===
+
+	In acest fisier am implement clientul. Verific daca s-a apelat corect
+programul, apoi declar socket-ul TCP si adresa server-ului. Apoi conectez
+clientul la server prin functia connect(). Definesc multimea de descriptori
+activi si pe cea temporara. Setez socket-ul conectat si stdin. Apoi mentin
+doua variabile care se seteaza la 1 daca clientul este logat, respectiv daca
+este in curs de login.
+	Urmeaza setarea socket-ului UDP. Completez informatiile pentru adresa
+UDP a server-ului.
+	Apoi creez un fisier ".log" in care scriu toata interactiunea
+clientului cu server-ul.
+	In ciclul de transmitere a datelor efectuez functia select() pentru
+realizarea multiplexarii. Apoi verific socketii setati in descriptorii activi.
+	In cazul lui stdin se citeste de la tastatura comanda care este
+analizata si urmeaza lista de comenzi a clientului:
+
+1) login
+	Se retine ultimul numar de card transmis pentru comanda unlock. Apoi
+se verifica daca clientul este deja logat, trimitandu-se astfel comanda
+catre server.
+
+2) logout
+	Se verifica daca clientul este deja logat, trimitandu-se astfel comanda
+catre server.
+
+3) listsold
+	Se verifica daca clientul este deja logat, trimitandu-se astfel comanda
+catre server.
+
+4) getmoney
+	Se verifica daca clientul este deja logat, trimitandu-se astfel comanda
+catre server.
+
+5) putmoney
+	Se verifica daca clientul este deja logat, trimitandu-se astfel comanda
+catre server.
+
+6) unlock
+	Se ataseaza comenzii "unlock" si ultimul numar de card introdus la o
+comanda login. Apoi se trimite comanda server-ului. Se asteapta raspunsul
+server-ului si se seteaza corespunzator variabila pentru pasul 2 al procesului
+de deblocare.
+	Tinandu-se cont ca parola secreta poate fi orice introdus de la
+tastatura se va verifica folosind variabila pentru pasul 2 de deblocare. Apoi
+se trimite parola secreta server-ului.
+
+7) quit
+	Se trimite server-ului comanda de quit.
+
+
+	In cazul in care descriptorul activ nu este stdin, inseamna ca s-a
+primit un mesaj de la server. Avem doua cazuri de mesaje speciale:
+
+a) atunci cand s-a efectuat login
+	Dupa efectuarea comenzii login, s-a retinut ca s-a trimis o cerere de
+logare. Daca aceasta variabila este setata si s-a primit un mesaj de "Welcome"
+(adica logare cu succes), se va seta variabila care retine faptul ca acest
+client este logat.
+
+b) quit de la server
+	Daca se primeste un mesaj cu "quit", inseamna ca server-ul s-a inchis
+si anunta clientul sa se inchida si el.
+
+	In rest se va afisa mesajul transmis de server catre client in urma
+efectuarii comenzilor date de client.
+
+
+
+=== Makefile ===
+
+	Makefile-ul este adaptat dupa cel din laboratorul 7 (TCP).
+	In el se afla variabilele PORT - pentru portul pe care server-ul
+asculta conexiunile, IP_SERVER - pentru adresa IP a server-ului si
+DATA_FILE pentru fisierul de date cu informatiile despre utilizatori.
+Reguliele din cadrul Makefile-ului sunt:
+
+a) build;
+b) run_server - ruleaza server-ul asa cum este specificat in enuntul temei;
+c) run_client - ruleaza clientul asa cum este specificat in enuntul temei;
+d) clean - sterge executabilele;
+e) clean_logs - sterge fisierele ".log".
